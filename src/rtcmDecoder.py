@@ -26,6 +26,7 @@ class PRIME:
             self.crcValue = self.crcFunc(data[0:6 + self.msglen])
             if self.crcValue == 0:
                 self.msgcontent = data[3:3 + self.msglen]
+
         return self.msglen, self.msgcontent
 
     def decodemsg(self, msgcontent):
@@ -37,6 +38,7 @@ class PRIME:
         for value in self.msgdecoded:
             print(f'{self.msgoutput[counter]}{value * self.coeff[counter]}')
             counter += 1
+
         return self.msgdecoded
     
 def _getcontent(msgtype):
@@ -65,14 +67,18 @@ def _getcontent(msgtype):
     P2_66 = 1.3552527156068805e-20
 
     if (msgtype == 1002):
-        msgdecodestr = ('')
-        msgoutput = ('')
+        msgdecodestr = ('u12u12u30s1u5s1s3u6s1u24s20u7u8u8')
+        msgoutput = ['Message type: ', 'Reference station ID: ', 'GPS Epoch Time: ', 'Synchronous GNSS Flag: ',
+                     'Satellite Signals Processed: ', 'Divergence-free Smoothing Indicator: ', 'Smoothing Interval: ',
+                     'Satellite ID: ', 'L1 Code Indicator: ', 'L1 Pseudorange: ', 'L1 PhaseRange - L1 Pseudorange: ',
+                     'L1 Lock time Indicator: ', 'Integer L1 Pseudorange Modulus Ambiguity: ', 'L1 CNR: ']
     elif (msgtype == 1019):
         msgdecodestr = ('u12u6u10u4s2s14u8u16s8s16s22u10s16s16s32s16u32s16u32u16s16s32s16s32s16s32s24s8u6s1s1')
         msgoutput = ['Message type: ', 'Satellite ID: ', 'Week Number: ', 'SV Accuracy: ', 'CODE ON L2: ',
                      'IDOT: ', 'IODE: ', 'toc: ', 'af2: ', 'af1: ', 'af0: ', 'IODC: ', 'Crs: ', '∆n: ', 'M0: ',
                      'Cuc: ', 'e: ', 'Cus: ', 'A½: ', 'toe: ', 'Cic: ', 'Ω0: ', 'Cis: ', 'i0: ', 'Crc: ', 'ω: ',
                      'Ω.: ', 'tGD: ', 'SV HEALTH: ', 'L2 P data flag: ', 'Fit Interval: ']
-        coeff =     [1,1,1,1,1,P2_43,1,P2_P4,P2_55,P2_43,P2_31,1,P2_5,P2_43,P2_31,P2_29,P2_33,
-                     P2_29,P2_19,P2_P4,P2_29,P2_31,P2_29,P2_31,P2_5,P2_31,P2_43,P2_31,1,1,1]
+        coeff =     [1, 1, 1, 1, 1, P2_43, 1, P2_P4, P2_55, P2_43, P2_31, 1, P2_5, P2_43, P2_31, P2_29, P2_33,
+                     P2_29, P2_19, P2_P4, P2_29, P2_31, P2_29, P2_31, P2_5, P2_31, P2_43, P2_31, 1, 1, 1]
+    
     return msgdecodestr, msgoutput, coeff
