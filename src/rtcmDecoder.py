@@ -13,27 +13,29 @@ class PRIME:
         self.crcValue = 0
         self.msglen = None
         self.msgcontent = None
+        self.msgcontentpack = None
         self.msgtype = None
         self.msgcontent = ''
         self.msgoutput = ''
         self.msgdecoded = None
         self.msgvalues = []
     
-    def get_message(self, path):
+    def get_message(self, path, number=0):
         with open(path, 'rb') as file:
             data = file.read()
-        if data[0:1] == b'\xd3':
-            frame_header_unpack = bitstruct.unpack('u8u6u10', data[0:3])
+        if data[0 + number*67:1 + number*67] == b'\xd3':
+            frame_header_unpack = bitstruct.unpack('u8u6u10', data[0 + number*67:3 + number*67])
             self.msglen = frame_header_unpack[2]
-            self.crcValue = self.crcFunc(data[0:6 + self.msglen])
+            self.crcValue = self.crcFunc(data[0 + number*67:6 + number*67 + self.msglen])
             if self.crcValue == 0:
-                self.msgcontent = data[3:3 + self.msglen]
+                self.msgcontent = data[3 + number*67:3 + number*67 + self.msglen]
 
         return self.msglen, self.msgcontent
 
-    def decode_message(self, msgcontent: bytes):
+    def decode_message(self, msgcontent: bytes, mode=None):
+        self.msgvalues = []
         self.msgtype = bitstruct.unpack('u12', msgcontent)[0]
-        self.msgdecodestr, self.msgoutput, self.coeff = _get_content(self.msgtype)
+        self.msgdecodestr, self.msgoutput, self.coeff = _get_content(self.msgtype, mode)
         self.msgdecoded = bitstruct.unpack(self.msgdecodestr, msgcontent)
         counter = 0
         for value in self.msgdecoded:
@@ -42,6 +44,13 @@ class PRIME:
             counter += 1
 
         return self.msgvalues
+    
+    def get_GPS_pseudoranges(self, values: tuple, number):
+        assert values[0][1] == 1002, 'Calculation is only possible for GPS RTK (1002) message.'
+        print(f'{values[2][0]}: {values[2][1]}')
+        for counter in range(number):
+            print(f'{values[7 + counter * 7][0]}: {values[7 + counter * 7][1]}')
+            print(f'Corrected pseudorange: {values[9 + counter * 7][1] + values[12 + counter * 7][1]}')
     
     def get_GPS_satellite_coords(self, values: tuple, show=False):
         assert values[0][1] == 1019, 'Calculation is only possible for GPS Satellite Ephemeris Data (1019) message.'
@@ -91,7 +100,7 @@ class PRIME:
             print(f'Corrected longitude of ascending node: {ascending_node_longitude_corr}')
         print(f'Earth-fixed geocentric satellite coordinate:\nX: {Xk}, Y: {Yk}, Z: {Zk}')
         
-def _get_content(msgtype):
+def _get_content(msgtype, mode=None):
     PI = 3.1415926535898
     P2_P4 = 16
     P2_4 = 0.0625
@@ -118,18 +127,28 @@ def _get_content(msgtype):
     P2_66 = 1.3552527156068805e-20
 
     if (msgtype == 1002):
-        msgdecodestr = ('u12u12u30s1u5s1s3u6s1u24s20u7u8u8')
-        msgoutput = ['Message type: ', 'Reference station ID: ', 'GPS Epoch Time: ', 'Synchronous GNSS Flag: ',
-                     'Satellite Signals Processed: ', 'Divergence-free Smoothing Indicator: ', 'Smoothing Interval: ',
-                     'Satellite ID: ', 'L1 Code Indicator: ', 'L1 Pseudorange: ', 'L1 PhaseRange - L1 Pseudorange: ',
-                     'L1 Lock time Indicator: ', 'Integer L1 Pseudorange Modulus Ambiguity: ', 'L1 CNR: ']
-    elif (msgtype == 1019):
+        if (mode == 'header'):
+            msgdecodestr = ('u12u12u30s1u5s1s3')
+            msgoutput = ['Message type: ', 'Reference station ID: ', 'GPS Epoch Time: ', 'Synchronous GNSS Flag: ',
+                         'Satellite Signals Processed: ', 'Divergence-free Smoothing Indicator: ', 'Smoothing Interval: ']
+            coeff = [1, 1, 1, 1, 1, 1, 1]
+        elif (mode == 'all'):
+            msgdecodestr = ('u12u12u30s1u5s1s3')
+            msgoutput = ['Message type: ', 'Reference station ID: ', 'GPS Epoch Time: ', 'Synchronous GNSS Flag: ',
+                         'Satellite Signals Processed: ', 'Divergence-free Smoothing Indicator: ', 'Smoothing Interval: ']
+            coeff = [1, 1, 1, 1, 1, 1, 1]
+            for _ in range(6):
+                msgdecodestr += ('u6s1u24s20u7u8u8')
+                msgoutput += ['Satellite ID: ', 'L1 Code Indicator: ', 'L1 Pseudorange: ', 'L1 PhaseRange - L1 Pseudorange: ',
+                              'L1 Lock time Indicator: ', 'Integer L1 Pseudorange Modulus Ambiguity: ', 'L1 CNR: ']
+                coeff += [1, 1, 0.02, 0.0005, 1, 299792.458, 0.25]
+    if (msgtype == 1019):
         msgdecodestr = ('u12u6u10u4s2s14u8u16s8s16s22u10s16s16s32s16u32s16u32u16s16s32s16s32s16s32s24s8u6s1s1')
         msgoutput = ['Message type: ', 'Satellite ID: ', 'Week Number: ', 'SV Accuracy: ', 'CODE ON L2: ',
                      'IDOT: ', 'IODE: ', 'toc: ', 'af2: ', 'af1: ', 'af0: ', 'IODC: ', 'Crs: ', '∆n: ', 'M0: ',
                      'Cuc: ', 'e: ', 'Cus: ', 'A½: ', 'toe: ', 'Cic: ', 'Ω0: ', 'Cis: ', 'i0: ', 'Crc: ', 'ω: ',
                      'Ω.: ', 'tGD: ', 'SV HEALTH: ', 'L2 P data flag: ', 'Fit Interval: ']
-        coeff =     [1, 1, 1, 1, 1, P2_43*PI, 1, P2_P4, P2_55, P2_43, P2_31, 1, P2_5, P2_43*PI, P2_31*PI, P2_29, P2_33,
-                     P2_29, P2_19, P2_P4, P2_29, P2_31*PI, P2_29, P2_31*PI, P2_5, P2_31*PI, P2_43*PI, P2_31, 1, 1, 1]
+        coeff = [1, 1, 1, 1, 1, P2_43*PI, 1, P2_P4, P2_55, P2_43, P2_31, 1, P2_5, P2_43*PI, P2_31*PI, P2_29, P2_33,
+                 P2_29, P2_19, P2_P4, P2_29, P2_31*PI, P2_29, P2_31*PI, P2_5, P2_31*PI, P2_43*PI, P2_31, 1, 1, 1]
         
     return msgdecodestr, msgoutput, coeff
